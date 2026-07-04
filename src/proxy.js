@@ -17,6 +17,7 @@ import { fetch } from 'undici';
 import { log } from './logger.js';
 import { sendJson } from './util.js';
 import { audit } from './auditlog.js';
+import { loadVariantConfig, applyVariant } from './variants.js';
 
 // Hop-by-hop headers that must not be forwarded by a proxy (RFC 7230 §6.1).
 const HOP_BY_HOP = new Set([
@@ -29,7 +30,8 @@ const HOP_BY_HOP = new Set([
   'transfer-encoding',
   'upgrade',
   'host',
-  'content-length', // undici re-computes from the body we pass
+  'content-length', // undici re-computes from the body we send
+  'content-encoding', // we auto-decompress upstream; don't forward a stale one
 ]);
 
 function forwardHeaders(req) {
@@ -145,7 +147,7 @@ async function proxyOnce(upstream, req, body, pool) {
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
       dispatcher: upstream.agent,
       signal: ctrl.signal,
-      compress: true,
+      compress: true, // undici auto-decompresses; we strip content-encoding below
     });
 
     // Retry on 5xx — likely a transient upstream issue.
@@ -182,7 +184,7 @@ export async function proxyRequest(req, res, pool, config) {
   }
 
   const meta = parseRequestMeta(body, req);
-  const { model, stream, body: parsedBody, sessionId } = meta;
+  let { model, stream, body: parsedBody, sessionId } = meta;
   const startedAt = Date.now();
   const rec = audit.beginRequest();
   rec.method = req.method;
@@ -194,6 +196,23 @@ export async function proxyRequest(req, res, pool, config) {
   rec.bytes = 0;
   rec.status = 0;
   rec.ok = false;
+
+  // Thinking-effort variant rewrite: swap the virtual variant model id for
+  // its base and inject verbosity + reasoning effort. Runs before prompt-cache
+  // injection so the latter sees the real (base) model.
+  let variantApplied = null;
+  if (parsedBody) {
+    const { parsed, variant } = applyVariant(parsedBody, loadVariantConfig());
+    if (variant) {
+      parsedBody = parsed;
+      body = Buffer.from(JSON.stringify(parsed), 'utf8');
+      model = parsed.model;
+      variantApplied = variant;
+      rec.variantOf = `${variant.base} (${variant.effort})`;
+      rec.model = `${model}-${variant.effort}`; // display the requested variant
+      res.setHeader('x-gateway-variant', `${variant.base}:${variant.effort}`);
+    }
+  }
 
   // Optional auto-injection of Anthropic prompt-caching cache_control.
   let injected = false;

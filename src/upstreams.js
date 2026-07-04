@@ -7,6 +7,7 @@
 import { Agent, fetch } from 'undici';
 import { Semaphore } from './concurrency.js';
 import { log } from './logger.js';
+import { generateVariantModels, loadVariantConfig } from './variants.js';
 
 export class UpstreamPool {
   /**
@@ -187,6 +188,21 @@ export class UpstreamPool {
           .map((r) => (r.status === 'rejected' ? r.reason?.message : null))
           .filter(Boolean);
         throw new Error(`All upstreams failed to return models: ${errs.join(' | ')}`);
+      }
+
+      // Append gateway-injected thinking-effort variants for the configured
+      // base models, but only for bases that actually exist upstream.
+      const vcfg = loadVariantConfig();
+      if (vcfg.enabled) {
+        const known = new Set(data.map((m) => m.id));
+        const variants = generateVariantModels(vcfg).filter((v) => known.has(v.base_model));
+        for (const v of variants) {
+          if (!seen.has(v.id)) {
+            seen.add(v.id);
+            data.push(v);
+          }
+        }
+        if (variants.length) log.info('variants added', { count: variants.length });
       }
 
       const value = { object: 'list', data };

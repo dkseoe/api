@@ -68,6 +68,34 @@ UPSTREAM_API_KEYS=sk-openai,sk-deepseek,sk-google
 | `GET /v1/models`     | Aggregated, cached model list pulled from upstreams.   |
 | `*  /v1/*` (and `/*`)| Reverse-proxied to the chosen upstream with failover. |
 
+## Thinking-effort variants
+
+The gateway exposes virtual **thinking-effort variant** models for Anthropic
+reasoning models, baking in a specific reasoning effort level:
+
+```
+<base-model>-<effort>     e.g. anthropic/claude-opus-4.7-xhigh
+```
+
+Default base models: `anthropic/claude-opus-4.7`, `anthropic/claude-opus-4.8`,
+`anthropic/claude-fable-5`. Default efforts: `low`, `medium`, `high`, `xhigh`,
+`max` (per the [Claude 4.7 migration guide](https://openrouter.ai/docs/cookbook/evaluate-and-optimize/model-migrations/claude-4-7)).
+
+When a client requests a variant, the gateway rewrites the model id to the
+base and injects `verbosity: <effort>` + `reasoning: {enabled:true, effort}`
+before proxying. Variants appear in `GET /v1/models` tagged with
+`upstream: gateway-variant` (and a `base_model` + `effort` field) so clients
+can discover them. The response carries `x-gateway-variant: <base>:<effort>`.
+
+Configure via env:
+
+```env
+VARIANTS_ENABLED=true
+VARIANT_BASES=anthropic/claude-opus-4.7,anthropic/claude-opus-4.8,anthropic/claude-fable-5
+VARIANT_EFFORTS=low,medium,high,xhigh,max
+```
+
+
 ## Observability
 
 Every proxied request is recorded in an in-memory audit log (ring buffer of

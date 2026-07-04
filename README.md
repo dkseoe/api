@@ -85,7 +85,7 @@ Defaults (override via `MODEL_PROVIDERS` env):
 ```json
 {
   "z-ai/glm-5.2": "siliconflow/fp8",
-  "deepseek/deepseek-v4-pro": "price"
+  "deepseek/deepseek-v4-pro": "alibaba"
 }
 ```
 

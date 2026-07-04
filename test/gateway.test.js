@@ -357,7 +357,7 @@ test('per-model provider pinning injects provider.order', async (t) => {
     assert.equal(r.headers.get('x-gateway-provider'), 'siliconflow/fp8');
     await r.text();
     assert.deepEqual(up.opts.lastBody.provider, { order: ['siliconflow/fp8'], allow_fallbacks: false });
-  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=price' });
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=alibaba' });
 });
 
 test('price-sort pinning injects {sort:price}', async (t) => {
@@ -371,9 +371,22 @@ test('price-sort pinning injects {sort:price}', async (t) => {
     })).text();
     const s = await (await fetch(`http://127.0.0.1:${port}/__status`)).json();
     const rec = s.requests[0];
-    assert.equal(rec.providerPin, 'price');
+    assert.equal(rec.providerPin, 'alibaba');
+    assert.deepEqual(up.opts.lastBody.provider, { order: ['alibaba'], allow_fallbacks: false });
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=alibaba' });
+});
+
+test('price-sort pin value injects {sort:price}', async (t) => {
+  const up = await mockUpstream(0);
+  t.after(() => new Promise((r) => up.server.close(r)));
+  await withGateway(t, [up], async (port) => {
+    await (await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'some/model', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] }),
+    })).text();
     assert.deepEqual(up.opts.lastBody.provider, { sort: 'price' });
-  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=price' });
+  }, { MODEL_PROVIDERS: 'some/model=price' });
 });
 
 test('client-provided provider object is not overridden', async (t) => {

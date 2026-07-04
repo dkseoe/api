@@ -22,17 +22,13 @@ const DEFAULTS = {
   // Per-model provider pinning (OpenRouter provider object).
   // Default pins per project request:
   //   z-ai/glm-5.2             -> siliconflow/fp8   (explicit order)
-  //   deepseek/deepseek-v4-pro -> "price"           (sort by price;
-  //                                                       OpenRouter picks the
-  //                                                       cheapest usable
-  //                                                       provider, falling
-  //                                                       back automatically)
+  //   deepseek/deepseek-v4-pro -> alibaba            (explicit order)
   // A pin value of "price" injects {sort:"price"}; any other string is a
   // provider slug for {order:[...]} (pipe-separated => list).
   // Override or extend via MODEL_PROVIDERS env.
   modelProviders: {
     'z-ai/glm-5.2': 'siliconflow/fp8',
-    'deepseek/deepseek-v4-pro': 'price',
+    'deepseek/deepseek-v4-pro': 'alibaba',
   },
   modelProviderAllowFallback: false,
 };

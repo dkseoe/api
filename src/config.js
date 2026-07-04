@@ -19,6 +19,16 @@ const DEFAULTS = {
   promptCacheInject: 'anthropic', // 'off' | 'anthropic' | 'all'
   promptCacheTtl: '5m', // '5m' | '1h' (Anthropic cache_control ttl)
   promptCacheSticky: true,
+  // Per-model provider pinning (OpenRouter provider.order).
+  // Default pins per project request:
+  //   z-ai/glm-5.2           -> siliconflow/fp8
+  //   deepseek/deepseek-v4-pro -> deepseek
+  // Override or extend via MODEL_PROVIDERS env.
+  modelProviders: {
+    'z-ai/glm-5.2': 'siliconflow/fp8',
+    'deepseek/deepseek-v4-pro': 'deepseek',
+  },
+  modelProviderAllowFallback: false,
 };
 
 function splitList(value) {
@@ -27,6 +37,25 @@ function splitList(value) {
     .split(/[\n,]/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/** Parse a "model=slug" mapping (comma/newline-separated) or a JSON object.
+ *  When `value` is empty, falls back to `defaults`. */
+function parseModelProviders(value, defaults = {}) {
+  if (!value) return { ...defaults };
+  if (typeof value === 'object') return value;
+  const out = {};
+  for (const part of splitList(value)) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    const model = part.slice(0, eq).trim();
+    const slug = part.slice(eq + 1).trim();
+    if (!model || !slug) continue;
+    // A model may map to multiple preferred providers: a/b|c/d
+    const slugs = slug.split('|').map((s) => s.trim()).filter(Boolean);
+    out[model] = slugs.length === 1 ? slugs[0] : slugs;
+  }
+  return out;
 }
 
 function num(value, fallback) {
@@ -105,6 +134,11 @@ export function loadConfig() {
     promptCacheInject: process.env.PROMPT_CACHE_INJECT ?? file.promptCacheInject ?? DEFAULTS.promptCacheInject,
     promptCacheTtl: process.env.PROMPT_CACHE_TTL ?? file.promptCacheTtl ?? DEFAULTS.promptCacheTtl,
     promptCacheSticky: bool(process.env.PROMPT_CACHE_STICKY ?? file.promptCacheSticky, DEFAULTS.promptCacheSticky),
+    modelProviders: parseModelProviders(process.env.MODEL_PROVIDERS ?? file.modelProviders, DEFAULTS.modelProviders),
+    modelProviderAllowFallback: bool(
+      process.env.MODEL_PROVIDER_ALLOW_FALLBACK ?? file.modelProviderAllowFallback,
+      DEFAULTS.modelProviderAllowFallback
+    ),
   });
 }
 
@@ -137,5 +171,7 @@ function normalize(c) {
     promptCacheInject: ['off', 'anthropic', 'all'].includes(c.promptCacheInject) ? c.promptCacheInject : 'anthropic',
     promptCacheTtl: c.promptCacheTtl === '1h' ? '1h' : '5m',
     promptCacheSticky: !!c.promptCacheSticky,
+    modelProviders: c.modelProviders && typeof c.modelProviders === 'object' ? c.modelProviders : {},
+    modelProviderAllowFallback: !!c.modelProviderAllowFallback,
   };
 }

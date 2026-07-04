@@ -68,6 +68,26 @@ UPSTREAM_API_KEYS=sk-openai,sk-deepseek,sk-google
 | `GET /v1/models`     | Aggregated, cached model list pulled from upstreams.   |
 | `*  /v1/*` (and `/*`)| Reverse-proxied to the chosen upstream with failover. |
 
+## Per-model provider pinning
+
+The gateway can pin specific models to a chosen OpenRouter provider by
+injecting `provider: {order, allow_fallbacks}` into the request body before
+proxying. Defaults (override via `MODEL_PROVIDERS` env):
+
+```json
+{
+  "z-ai/glm-5.2": "siliconflow/fp8",
+  "deepseek/deepseek-v4-pro": "deepseek"
+}
+```
+
+Requests for these models carry `x-gateway-provider: <slug>` and the audit log
+records `providerPin`. A client-supplied `provider` object is never overridden.
+Multiple preferred providers can be listed pipe-separated, e.g.
+`model=a/fp8|b/fp8`. Set `MODEL_PROVIDER_ALLOW_FALLBACK=true` to allow
+fallback to other providers when the pinned one is unavailable.
+
+
 ## Thinking-effort variants
 
 The gateway exposes virtual **thinking-effort variant** models for Anthropic

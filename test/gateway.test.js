@@ -76,7 +76,7 @@ function mockUpstream(port, opts = {}) {
   );
 }
 
-async function withGateway(t, upstreams, handler) {
+async function withGateway(t, upstreams, handler, env = {}) {
   process.env.UPSTREAMS = upstreams.map((u) => `http://127.0.0.1:${u.port}/v1`).join(',');
   process.env.UPSTREAM_API_KEYS = '';
   process.env.MAX_CONCURRENCY_PER_UPSTREAM = '4';
@@ -84,6 +84,13 @@ async function withGateway(t, upstreams, handler) {
   process.env.MODELS_CACHE_TTL_MS = '1000';
   process.env.UPSTREAM_REQUEST_TIMEOUT_MS = '5000';
   delete process.env.GATEWAY_CONFIG;
+  // Reset optional env to defaults so tests don't leak settings into each other.
+  for (const k of ['MODEL_PROVIDERS', 'MODEL_PROVIDER_ALLOW_FALLBACK', 'PROMPT_CACHE_INJECT', 'PROMPT_CACHE_TTL', 'PROMPT_CACHE_STICKY', 'VARIANTS_ENABLED', 'VARIANT_BASES', 'VARIANT_EFFORTS']) {
+    delete process.env[k];
+  }
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
 
   const config = loadConfig();
   const { server, pool } = createGateway(config);
@@ -335,4 +342,70 @@ test('session_id from body takes precedence over header', async (t) => {
     const sids = s.requests.map((r) => r.sessionId).sort();
     assert.deepEqual(sids, ['A', 'A', 'B', 'B']);
   });
+});
+
+test('per-model provider pinning injects provider.order', async (t) => {
+  const up = await mockUpstream(0);
+  t.after(() => new Promise((r) => up.server.close(r)));
+  await withGateway(t, [up], async (port) => {
+    const r = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'z-ai/glm-5.2', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('x-gateway-provider'), 'siliconflow/fp8');
+    await r.text();
+    assert.deepEqual(up.opts.lastBody.provider, { order: ['siliconflow/fp8'], allow_fallbacks: false });
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=deepseek' });
+});
+
+test('provider pinning is recorded in the audit log', async (t) => {
+  const up = await mockUpstream(0);
+  t.after(() => new Promise((r) => up.server.close(r)));
+  await withGateway(t, [up], async (port) => {
+    await (await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'deepseek/deepseek-v4-pro', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] }),
+    })).text();
+    const s = await (await fetch(`http://127.0.0.1:${port}/__status`)).json();
+    const rec = s.requests[0];
+    assert.equal(rec.providerPin, 'deepseek');
+    assert.deepEqual(up.opts.lastBody.provider, { order: ['deepseek'], allow_fallbacks: false });
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=deepseek' });
+});
+
+test('client-provided provider object is not overridden', async (t) => {
+  const up = await mockUpstream(0);
+  t.after(() => new Promise((r) => up.server.close(r)));
+  await withGateway(t, [up], async (port) => {
+    const r = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'z-ai/glm-5.2',
+        provider: { order: ['novita/fp8'], allow_fallbacks: true },
+        max_tokens: 5, messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+    await r.text();
+    assert.deepEqual(up.opts.lastBody.provider, { order: ['novita/fp8'], allow_fallbacks: true });
+    assert.equal(r.headers.get('x-gateway-provider'), null, 'no pin header when client set provider');
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8' });
+});
+
+test('models without a configured provider are not pinned', async (t) => {
+  const up = await mockUpstream(0);
+  t.after(() => new Promise((r) => up.server.close(r)));
+  await withGateway(t, [up], async (port) => {
+    const r = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'openai/gpt-4o-mini', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    await r.text();
+    assert.equal(up.opts.lastBody.provider, undefined);
+    assert.equal(r.headers.get('x-gateway-provider'), null);
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8' });
 });

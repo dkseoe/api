@@ -223,6 +223,21 @@ export async function proxyRequest(req, res, pool, config) {
     if (injected) res.setHeader('x-gateway-prompt-cache', 'injected');
   }
 
+  // Per-model provider pinning (OpenRouter provider.order). Applies to the
+  // final (post-variant) model id so it works for both direct and variant
+  // requests. Skipped if the client already set a `provider` object.
+  if (parsedBody && config.modelProviders && !parsedBody.provider) {
+    const pin = config.modelProviders[model];
+    if (pin) {
+      const order = Array.isArray(pin) ? pin : [pin];
+      parsedBody.provider = { order, allow_fallbacks: config.modelProviderAllowFallback };
+      if (body) body = Buffer.from(JSON.stringify(parsedBody), 'utf8');
+      rec.providerPin = order.join('|');
+      res.setHeader('x-gateway-provider', order.join('|'));
+      log.debug('provider pinned', { model, order });
+    }
+  }
+
   const upstreams = pool.all();
   const useSticky = config.promptCacheSticky && upstreams.length > 1 && sessionId;
   const attempted = new Set();

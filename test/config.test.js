@@ -61,3 +61,16 @@ test('auto-detects generic OpenRouter with /v1', () => {
   const c = loadConfig();
   assert.equal(c.upstreams[0].baseUrl, 'https://openrouter.ai/api/v1');
 });
+
+test('parses MODEL_PROVIDERS mapping (single and multiple slugs)', () => {
+  delete process.env.UPSTREAMS;
+  delete process.env.UPSTREAM_API_KEYS;
+  delete process.env.GATEWAY_CONFIG;
+  process.env.UPSTREAMS = 'https://api.openai.com/v1';
+  process.env.MODEL_PROVIDERS = 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=deepseek,model/multi=a|b|c';
+  const c = loadConfig();
+  assert.equal(c.modelProviders['z-ai/glm-5.2'], 'siliconflow/fp8');
+  assert.equal(c.modelProviders['deepseek/deepseek-v4-pro'], 'deepseek');
+  assert.deepEqual(c.modelProviders['model/multi'], ['a', 'b', 'c']);
+  assert.equal(c.modelProviderAllowFallback, false);
+});

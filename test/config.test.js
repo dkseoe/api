@@ -67,10 +67,10 @@ test('parses MODEL_PROVIDERS mapping (single and multiple slugs)', () => {
   delete process.env.UPSTREAM_API_KEYS;
   delete process.env.GATEWAY_CONFIG;
   process.env.UPSTREAMS = 'https://api.openai.com/v1';
-  process.env.MODEL_PROVIDERS = 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=streamlake/fp8,model/multi=a|b|c';
+  process.env.MODEL_PROVIDERS = 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=price,model/multi=a|b|c';
   const c = loadConfig();
   assert.equal(c.modelProviders['z-ai/glm-5.2'], 'siliconflow/fp8');
-  assert.equal(c.modelProviders['deepseek/deepseek-v4-pro'], 'streamlake/fp8');
+  assert.equal(c.modelProviders['deepseek/deepseek-v4-pro'], 'price');
   assert.deepEqual(c.modelProviders['model/multi'], ['a', 'b', 'c']);
   assert.equal(c.modelProviderAllowFallback, false);
 });

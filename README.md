@@ -71,24 +71,28 @@ UPSTREAM_API_KEYS=sk-openai,sk-deepseek,sk-google
 ## Per-model provider pinning
 
 The gateway can pin specific models to a chosen OpenRouter provider by
-injecting `provider: {order, allow_fallbacks}` into the request body before
-proxying. Defaults pin per project request:
-  z-ai/glm-5.2             -> siliconflow/fp8
-  deepseek/deepseek-v4-pro  -> streamlake/fp8  (cheapest usable provider)
-Override or extend via `MODEL_PROVIDERS` env:
+injecting a `provider` object into the request body before proxying.
+
+- A pin value of **`"price"`** injects `{sort:"price"}` — OpenRouter picks
+  the cheapest usable provider and falls back automatically if it is
+  unavailable (so the original provider is tried first when reachable).
+- Any other string is treated as a provider slug and injects
+  `{order:[slug], allow_fallbacks}` for an explicit pin (pipe-separated
+  for a preference list).
+
+Defaults (override via `MODEL_PROVIDERS` env):
 
 ```json
 {
   "z-ai/glm-5.2": "siliconflow/fp8",
-  "deepseek/deepseek-v4-pro": "streamlake/fp8"
+  "deepseek/deepseek-v4-pro": "price"
 }
 ```
 
-Requests for these models carry `x-gateway-provider: <slug>` and the audit log
-records `providerPin`. A client-supplied `provider` object is never overridden.
-Multiple preferred providers can be listed pipe-separated, e.g.
-`model=a/fp8|b/fp8`. Set `MODEL_PROVIDER_ALLOW_FALLBACK=true` to allow
-fallback to other providers when the pinned one is unavailable.
+Requests for these models carry `x-gateway-provider: <slug|price>` and the
+audit log records `providerPin`. A client-supplied `provider` object is never
+overridden. Set `MODEL_PROVIDER_ALLOW_FALLBACK=true` to allow fallback for
+explicit `order` pins.
 
 
 ## Thinking-effort variants

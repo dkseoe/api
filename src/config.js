@@ -19,14 +19,20 @@ const DEFAULTS = {
   promptCacheInject: 'anthropic', // 'off' | 'anthropic' | 'all'
   promptCacheTtl: '5m', // '5m' | '1h' (Anthropic cache_control ttl)
   promptCacheSticky: true,
-  // Per-model provider pinning (OpenRouter provider.order).
+  // Per-model provider pinning (OpenRouter provider object).
   // Default pins per project request:
-  //   z-ai/glm-5.2             -> siliconflow/fp8
-  //   deepseek/deepseek-v4-pro -> streamlake/fp8  (cheapest usable provider)
+  //   z-ai/glm-5.2             -> siliconflow/fp8   (explicit order)
+  //   deepseek/deepseek-v4-pro -> "price"           (sort by price;
+  //                                                       OpenRouter picks the
+  //                                                       cheapest usable
+  //                                                       provider, falling
+  //                                                       back automatically)
+  // A pin value of "price" injects {sort:"price"}; any other string is a
+  // provider slug for {order:[...]} (pipe-separated => list).
   // Override or extend via MODEL_PROVIDERS env.
   modelProviders: {
     'z-ai/glm-5.2': 'siliconflow/fp8',
-    'deepseek/deepseek-v4-pro': 'streamlake/fp8',
+    'deepseek/deepseek-v4-pro': 'price',
   },
   modelProviderAllowFallback: false,
 };

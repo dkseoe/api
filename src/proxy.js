@@ -223,18 +223,31 @@ export async function proxyRequest(req, res, pool, config) {
     if (injected) res.setHeader('x-gateway-prompt-cache', 'injected');
   }
 
-  // Per-model provider pinning (OpenRouter provider.order). Applies to the
+  // Per-model provider pinning (OpenRouter provider object). Applies to the
   // final (post-variant) model id so it works for both direct and variant
   // requests. Skipped if the client already set a `provider` object.
+  //
+  // Pin values:
+  //   "price"           => inject {sort:"price"}; OpenRouter picks the
+  //                        cheapest usable provider and falls back
+  //                        automatically if the cheapest is unavailable.
+  //   "slug" / [..]     => inject {order:[...], allow_fallbacks}; explicit
+  //                        provider preference (pipe-separated for a list).
   if (parsedBody && config.modelProviders && !parsedBody.provider) {
     const pin = config.modelProviders[model];
     if (pin) {
-      const order = Array.isArray(pin) ? pin : [pin];
-      parsedBody.provider = { order, allow_fallbacks: config.modelProviderAllowFallback };
+      if (pin === 'price') {
+        parsedBody.provider = { sort: 'price' };
+        rec.providerPin = 'price';
+        res.setHeader('x-gateway-provider', 'price');
+      } else {
+        const order = Array.isArray(pin) ? pin : [pin];
+        parsedBody.provider = { order, allow_fallbacks: config.modelProviderAllowFallback };
+        rec.providerPin = order.join('|');
+        res.setHeader('x-gateway-provider', order.join('|'));
+      }
       if (body) body = Buffer.from(JSON.stringify(parsedBody), 'utf8');
-      rec.providerPin = order.join('|');
-      res.setHeader('x-gateway-provider', order.join('|'));
-      log.debug('provider pinned', { model, order });
+      log.debug('provider pinned', { model, pin: rec.providerPin });
     }
   }
 

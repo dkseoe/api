@@ -21,12 +21,12 @@ const DEFAULTS = {
   promptCacheSticky: true,
   // Per-model provider pinning (OpenRouter provider.order).
   // Default pins per project request:
-  //   z-ai/glm-5.2           -> siliconflow/fp8
-  //   deepseek/deepseek-v4-pro -> deepseek
+  //   z-ai/glm-5.2             -> siliconflow/fp8
+  //   deepseek/deepseek-v4-pro -> streamlake/fp8  (cheapest usable provider)
   // Override or extend via MODEL_PROVIDERS env.
   modelProviders: {
     'z-ai/glm-5.2': 'siliconflow/fp8',
-    'deepseek/deepseek-v4-pro': 'deepseek',
+    'deepseek/deepseek-v4-pro': 'streamlake/fp8',
   },
   modelProviderAllowFallback: false,
 };

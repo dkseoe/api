@@ -72,12 +72,15 @@ UPSTREAM_API_KEYS=sk-openai,sk-deepseek,sk-google
 
 The gateway can pin specific models to a chosen OpenRouter provider by
 injecting `provider: {order, allow_fallbacks}` into the request body before
-proxying. Defaults (override via `MODEL_PROVIDERS` env):
+proxying. Defaults pin per project request:
+  z-ai/glm-5.2             -> siliconflow/fp8
+  deepseek/deepseek-v4-pro  -> streamlake/fp8  (cheapest usable provider)
+Override or extend via `MODEL_PROVIDERS` env:
 
 ```json
 {
   "z-ai/glm-5.2": "siliconflow/fp8",
-  "deepseek/deepseek-v4-pro": "deepseek"
+  "deepseek/deepseek-v4-pro": "streamlake/fp8"
 }
 ```
 

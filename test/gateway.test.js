@@ -357,7 +357,7 @@ test('per-model provider pinning injects provider.order', async (t) => {
     assert.equal(r.headers.get('x-gateway-provider'), 'siliconflow/fp8');
     await r.text();
     assert.deepEqual(up.opts.lastBody.provider, { order: ['siliconflow/fp8'], allow_fallbacks: false });
-  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=deepseek' });
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=streamlake/fp8' });
 });
 
 test('provider pinning is recorded in the audit log', async (t) => {
@@ -371,9 +371,9 @@ test('provider pinning is recorded in the audit log', async (t) => {
     })).text();
     const s = await (await fetch(`http://127.0.0.1:${port}/__status`)).json();
     const rec = s.requests[0];
-    assert.equal(rec.providerPin, 'deepseek');
-    assert.deepEqual(up.opts.lastBody.provider, { order: ['deepseek'], allow_fallbacks: false });
-  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=deepseek' });
+    assert.equal(rec.providerPin, 'streamlake/fp8');
+    assert.deepEqual(up.opts.lastBody.provider, { order: ['streamlake/fp8'], allow_fallbacks: false });
+  }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8,deepseek/deepseek-v4-pro=streamlake/fp8' });
 });
 
 test('client-provided provider object is not overridden', async (t) => {

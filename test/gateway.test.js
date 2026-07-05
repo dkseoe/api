@@ -19,6 +19,14 @@ function mockUpstream(port, opts = {}) {
       res.end(JSON.stringify({ object: 'list', data: [{ id: 'gpt-test', object: 'model' }] }));
       return;
     }
+    // HEAD probe (e.g. tunnel health checks) — no body, mirrors a real
+    // upstream that returns content-length but no entity.
+    if (req.method === 'HEAD' && (req.url === '/' || req.url === '/v1' || req.url === '/v1/')) {
+      opts.calls = (opts.calls || 0) + 1;
+      res.writeHead(200, { 'content-type': 'application/json', 'content-length': '0' });
+      res.end();
+      return;
+    }
     if (req.method === 'POST' && req.url === '/v1/chat/completions') {
       opts.calls = (opts.calls || 0) + 1;
       let body = '';
@@ -421,4 +429,24 @@ test('models without a configured provider are not pinned', async (t) => {
     assert.equal(up.opts.lastBody.provider, undefined);
     assert.equal(r.headers.get('x-gateway-provider'), null);
   }, { MODEL_PROVIDERS: 'z-ai/glm-5.2=siliconflow/fp8' });
+});
+
+test('HEAD requests with no upstream body do not crash the proxy', async (t) => {
+  const up = await mockUpstream(0);
+  t.after(() => new Promise((r) => up.server.close(r)));
+  await withGateway(t, [up], async (port) => {
+    // A HEAD probe should return cleanly without throwing
+    // "Cannot read properties of null (reading 'Symbol(Symbol.asyncIterator)')".
+    const r = await fetch(`http://127.0.0.1:${port}/`, { method: 'HEAD' });
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), '');
+    assert.equal(up.opts.calls, 1, 'HEAD reached the upstream');
+    // No error should have been recorded for this request.
+    const s = await (await fetch(`http://127.0.0.1:${port}/__status`)).json();
+    const rec = s.requests[0];
+    assert.equal(rec.method, 'HEAD');
+    assert.equal(rec.status, 200);
+    assert.equal(rec.ok, true);
+    assert.equal(rec.error, undefined);
+  });
 });

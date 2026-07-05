@@ -280,17 +280,21 @@ export async function proxyRequest(req, res, pool, config) {
       const isStream = stream || ct.includes('text/event-stream');
 
       if (isStream) {
-        // Stream the upstream body straight to the client.
+        // Stream the upstream body straight to the client. HEAD responses
+        // (and 204/304) have no body, so guard against a null stream.
         res.writeHead(upstreamRes.status, sanitizeHeaders(upstreamRes.headers));
+        const hasBody = req.method !== 'HEAD' && upstreamRes.body;
         try {
-          for await (const chunk of upstreamRes.body) {
-            rec.bytes += chunk.length;
-            if (!res.write(chunk)) {
-              await new Promise((r) => res.once('drain', r));
+          if (hasBody) {
+            for await (const chunk of upstreamRes.body) {
+              rec.bytes += chunk.length;
+              if (!res.write(chunk)) {
+                await new Promise((r) => res.once('drain', r));
+              }
             }
           }
         } finally {
-          await upstreamRes.body?.cancel?.().catch(() => {});
+          if (hasBody) await upstreamRes.body?.cancel?.().catch(() => {});
           res.end();
         }
         rec.status = upstreamRes.status;
@@ -303,9 +307,14 @@ export async function proxyRequest(req, res, pool, config) {
       }
 
       // Buffered JSON response — parse usage + cache metrics, then send.
-      const bufChunks = [];
-      for await (const chunk of upstreamRes.body) bufChunks.push(chunk);
-      const buf = Buffer.concat(bufChunks);
+      // HEAD/204/304 responses have no body.
+      const hasBody = req.method !== 'HEAD' && upstreamRes.status !== 204 && upstreamRes.status !== 304 && upstreamRes.body;
+      let buf = Buffer.alloc(0);
+      if (hasBody) {
+        const bufChunks = [];
+        for await (const chunk of upstreamRes.body) bufChunks.push(chunk);
+        buf = Buffer.concat(bufChunks);
+      }
       rec.bytes = buf.length;
 
       let parsed;
